@@ -1,0 +1,172 @@
+/* איפוס בסיסי וסגנונות כלליים */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: #1e1e1e;
+  color: #f0f0f0;
+  direction: rtl;
+}
+
+/* רכיב כרטיס */
+.card {
+  background: #2a2a2a;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* כפתורים כלליים */
+.btn {
+  background: #5a52e6;
+  color: #fff;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 5px;
+  transition: background 0.3s ease;
+  font-weight: bold;
+}
+.btn:hover:not(:disabled) { background: #4338ca; }
+.btn:disabled {
+  background: #555;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* כפתור ביטול/משני */
+.btn.cancel {
+  background: #555;
+  color: #ccc;
+}
+.btn.cancel:hover:not(:disabled) { background: #333; }
+
+/* כפתורי טאבים */
+.tab-container { margin-bottom: 10px; }
+.tab-btn {
+  cursor: pointer;
+  padding: 8px 15px;
+  margin: 0 5px 0 0;
+  background: #3a3a3a;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  color: #aaa;
+  transition: all 0.3s ease;
+}
+.tab-btn.active {
+  background: #5a52e6;
+  color: #fff;
+}
+
+/* תוכן טאב */
+.tab-content {
+  display: none;
+  padding-top: 0;
+}
+.tab-content.active { display: block; }
+
+/* מודל */
+.modal-bg {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.modal {
+  position: relative; 
+  background: #2a2a2a;
+  padding: 20px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* 🌀 סגנון הטעינה (Spinner) */
+.loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #5a52e6; 
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 10px auto;
+}
+
+/* אפקט סיבוב */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* מצב טעינה: דיכוי המודל */
+.modal-bg.loading-mode .modal, 
+.tab-content.loading-mode .card-content { 
+    opacity: 0.7;
+    pointer-events: none; 
+}
+
+/* שדות קלט ובחירה */
+input:not([type="file"]), select {
+  width: 100%;
+  margin: 8px 0 15px 0;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #333;
+  color: #f0f0f0;
+  box-sizing: border-box;
+}
+
+/* קלט קובץ */
+input[type="file"] {
+  border: 1px dashed #5a52e6;
+  padding: 15px 10px;
+  cursor: pointer;
+}
+
+/* גל קול */
+canvas {
+  width: 100%;
+  height: 60px;
+  background: #333;
+  margin-top: 10px;
+  border-radius: 5px;
+  border: 1px solid #444;
+}
+
+/* רשימות */
+ul {
+  list-style: none;
+  padding: 0;
+}
+li {
+  background: #333;
+  padding: 10px;
+  border-radius: 5px;
+  margin: 5px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+li button { margin-right: 0; margin-left: 5px; }
+
+/* נגן אודיו */
+audio {
+  width: 100%;
+  margin: 10px 0;
+}
+
+/* כותרות וטקסט */
+h1 { color: #5a52e6; margin-bottom: 10px; }
+h2, h3 { border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 0; }
+label { display: block; margin-top: 10px; font-weight: bold; }
+
