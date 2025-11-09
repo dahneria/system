@@ -1,68 +1,78 @@
-// --- JAVASCRIPT: לוגיקה בסיסית וטיפול במודלים ---
-
-// שימוש במשתנים גלובליים ספציפיים וקבועים
+// --- משתנים גלובליים ---
 const DOM_ELEMENTS = {
-    // טאבים
     tabs: document.querySelectorAll('.tab-btn'),
     contents: document.querySelectorAll('.tab-content'),
-    // קריאה מיידית
     startBtn: document.getElementById('start-record'),
     stopBtn: document.getElementById('stop-record'),
     sendPanicBtn: document.getElementById('send-panic'),
     playback: document.getElementById('panic-playback'),
     recordStatus: document.getElementById('record-status'),
-    immediateCallCard: document.getElementById('immediate-call'),
-    // שירים
-    songForm: document.getElementById('song-form'),
+    songList: document.getElementById('song-list'),
+    addSongBtn: document.getElementById('add-song-btn'),
     addSongModal: document.getElementById('add-song-modal'),
     cancelSongBtn: document.getElementById('cancel-song-btn'),
     saveSongBtn: document.getElementById('save-song-btn'),
     newSongName: document.getElementById('new-song-name'),
     newSongFile: document.getElementById('new-song-file'),
-    songLoadingSpinner: document.getElementById('song-loading-spinner'),
-    // אירועים
-    eventForm: document.getElementById('event-form'),
+    waveform: document.getElementById('waveform'),
+    clipStartLabel: document.getElementById('clip-start-label'),
+    clipEndLabel: document.getElementById('clip-end-label'),
+    clipStartRange: document.getElementById('clip-start-range'),
+    clipEndRange: document.getElementById('clip-end-range'),
+    songForm: document.getElementById('song-form'),
+    eventsList: document.getElementById('events-list'),
+    openEventModalBtn: document.getElementById('open-event-modal'),
     eventModal: document.getElementById('event-modal'),
     cancelEventBtn: document.getElementById('cancel-event-btn'),
-    openEventModalBtn: document.getElementById('open-event-modal'),
     saveEventBtn: document.getElementById('save-event-btn'),
-    eventLoadingSpinner: document.getElementById('event-loading-spinner'),
-    // נתונים
-    eventsList: document.getElementById('events-list'),
-    songList: document.getElementById('song-list'),
+    newEventName: document.getElementById('new-event-name'),
+    newEventTime: document.getElementById('new-event-time'),
+    newEventDay: document.getElementById('new-event-day'),
     eventSongSelect: document.getElementById('event-song-select'),
+    eventForm: document.getElementById('event-form')
 };
 
+let songs = [];
+let events = [];
 let mediaRecorder;
 let audioChunks = [];
+let audioBuffer;
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const canvasCtx = DOM_ELEMENTS.waveform.getContext('2d');
+let currentSongId = -1;
+let isSongEditMode = false;
+let isEditMode = false;
+let editingEventIndex = -1;
 let panicAudioBlob = null;
-let songs = [{"id": "s1", "name": "צלצול בוקר לדוגמה"}]; // נתונים מדומים
-let events = [{"id": "e1", "name": "תחילת יום דוגמה", "time": "08:00", "day": "ראשון", "songId": "s1"}];
 
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initPanicRecorder();
-    initSongModal();
-    initEventModal();
-    renderData(); // טעינת נתונים מדומים
+    initSongsManager();
+    initEventsManager();
+    
+    // יש לתקן את מיקום השמירה - לדוגמה LocalStorage
+    loadDataFromLocal();
     requestMicrophoneAccess();
 });
 
-// --- פונקציות עזר לטעינה ---
-function startLoading(modalElement, spinnerElement, buttonElement, text = 'שומר...') {
-    modalElement.classList.add('loading-mode');
-    spinnerElement.style.display = 'block';
-    buttonElement.disabled = true;
-    buttonElement.textContent = text;
+// --- טעינת נתונים מקומית ---
+function loadDataFromLocal() {
+    const localSongs = localStorage.getItem('songs');
+    const localEvents = localStorage.getItem('events');
+
+    songs = localSongs ? JSON.parse(localSongs) : [];
+    events = localEvents ? JSON.parse(localEvents) : [];
+
+    renderSongList();
+    renderEvents();
 }
 
-function stopLoading(modalElement, spinnerElement, buttonElement, newText = 'שמור') {
-    modalElement.classList.remove('loading-mode');
-    spinnerElement.style.display = 'none';
-    buttonElement.disabled = false;
-    buttonElement.textContent = newText;
-    // סגירת המודל לאחר סיום הפעולה
-    modalElement.style.display = 'none'; 
+// --- שמירת נתונים מקומית ---
+function saveDataToLocal() {
+    // יש לתקן את מיקום השמירה
+    localStorage.setItem('songs', JSON.stringify(songs));
+    localStorage.setItem('events', JSON.stringify(events));
 }
 
 // --- טאבים ---
@@ -71,257 +81,197 @@ function initTabs() {
         tab.addEventListener('click', () => {
             DOM_ELEMENTS.eventModal.style.display = 'none';
             DOM_ELEMENTS.addSongModal.style.display = 'none';
-            
             DOM_ELEMENTS.tabs.forEach(t => t.classList.remove('active'));
             DOM_ELEMENTS.contents.forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
-            
             document.getElementById(tab.dataset.tab).classList.add('active');
         });
     });
 }
-async function requestMicrophoneAccess() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        DOM_ELEMENTS.recordStatus.textContent = "✅ המיקרופון נגיש.";
-        stream.getTracks().forEach(track => track.stop());
-        return true;
-    } catch (err) {
-        DOM_ELEMENTS.recordStatus.textContent = "⚠️ גישה למיקרופון נחסמה.";
-        DOM_ELEMENTS.startBtn.disabled = true;
-        return false;
-    }
-}
-// --- מימוש קריאה מיידית (פאניקה) ---
+
+// --- קריאה מיידית (פאניקה) ---
 function initPanicRecorder() {
     DOM_ELEMENTS.startBtn.addEventListener('click', async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             audioChunks = [];
-            
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
-            
+            mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                const mimeType = mediaRecorder.mimeType.split(';')[0];
-                panicAudioBlob = new Blob(audioChunks, { type: mimeType });
+                panicAudioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType.split(';')[0] });
                 DOM_ELEMENTS.playback.src = URL.createObjectURL(panicAudioBlob);
-                
                 DOM_ELEMENTS.stopBtn.disabled = true;
                 DOM_ELEMENTS.sendPanicBtn.disabled = false;
                 DOM_ELEMENTS.startBtn.disabled = false;
-                DOM_ELEMENTS.recordStatus.textContent = "הקלטה הושלמה. ניתן לשלוח או להקליט מחדש.";
+                DOM_ELEMENTS.recordStatus.textContent = "הקלטה הושלמה.";
                 stream.getTracks().forEach(track => track.stop());
             };
-            
             mediaRecorder.start();
             DOM_ELEMENTS.recordStatus.textContent = "🔴 מקליט...";
             DOM_ELEMENTS.startBtn.disabled = true;
             DOM_ELEMENTS.stopBtn.disabled = false;
             DOM_ELEMENTS.sendPanicBtn.disabled = true;
-
-        } catch (err) {
-            alert(`שגיאה בגישה למיקרופון: ${err.message}.`);
+        } catch(err) {
+            DOM_ELEMENTS.recordStatus.textContent = "❌ שגיאה בגישה למיקרופון.";
+            DOM_ELEMENTS.startBtn.disabled = true;
         }
     });
 
     DOM_ELEMENTS.stopBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            DOM_ELEMENTS.recordStatus.textContent = "מעבד הקלטה...";
-        }
+        if(mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop();
     });
 
-    DOM_ELEMENTS.sendPanicBtn.addEventListener('click', async () => {
-        if (!panicAudioBlob) return alert('⚠️ אין הקלטה לשליחה.');
-        
-        DOM_ELEMENTS.sendPanicBtn.disabled = true;
-        DOM_ELEMENTS.recordStatus.textContent = "🚀 שולח ומפעיל קריאה...";
-
-        const formData = new FormData();
-        // שליחת הקובץ כ-mp3 לצורך שמירה בשרת
-        formData.append('file', panicAudioBlob, 'panic_message.mp3'); 
-
-        try {
-            // סימון טעינה
-            DOM_ELEMENTS.immediateCallCard.classList.add('loading-mode');
-
-            // --- כאן נכנסת לוגיקת ה-API האמיתית שלך! ---
-            const response = await fetch('/api/panic', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error('שגיאה בשליחת הקריאה לשרת');
-            
-            await new Promise(resolve => setTimeout(resolve, 1500)); // סימולציה של זמן טעינה
-
-            alert('✅ קריאה מיידית נשלחה ונשמרה.');
-            
-        } catch (err) {
-            console.error("שגיאה בהפעלת קריאה מיידית:", err);
-            alert('⚠️ שגיאה בהפעלת קריאה מיידית: ' + err.message);
-        } finally {
-            // סיום טעינה
-            DOM_ELEMENTS.immediateCallCard.classList.remove('loading-mode');
-            DOM_ELEMENTS.playback.src = '';
-            panicAudioBlob = null;
-            DOM_ELEMENTS.sendPanicBtn.disabled = true;
-            DOM_ELEMENTS.recordStatus.textContent = "מוכן להקלטה...";
-        }
+    DOM_ELEMENTS.sendPanicBtn.addEventListener('click', () => {
+        if(!panicAudioBlob) return alert('⚠️ אין הקלטה לשליחה.');
+        alert('✅ קריאה נשלחה! (ללא שמירה חיצונית)');
+        panicAudioBlob = null;
+        DOM_ELEMENTS.playback.src = '';
     });
 }
 
-// --- ניהול מודל שירים ---
-function initSongModal() {
-    DOM_ELEMENTS.addSongModal.querySelector('#add-song-btn').addEventListener('click', () => {
-        DOM_ELEMENTS.addSongModal.style.display = 'flex';
-    });
-    DOM_ELEMENTS.cancelSongBtn.addEventListener('click', () => DOM_ELEMENTS.addSongModal.style.display = 'none');
+// --- ניהול שירים ---
+function initSongsManager() {
+    DOM_ELEMENTS.addSongBtn.addEventListener('click', () => openSongModal(false));
+    DOM_ELEMENTS.cancelSongBtn.addEventListener('click', () => DOM_ELEMENTS.addSongModal.style.display='none');
+    DOM_ELEMENTS.newSongFile.addEventListener('change', loadWaveform);
     DOM_ELEMENTS.songForm.addEventListener('submit', saveSong);
-    // הסרתי את כל לוגיקת ה-Waveform המורכבת
+    DOM_ELEMENTS.clipStartRange.addEventListener('input', updateClipRange);
+    DOM_ELEMENTS.clipEndRange.addEventListener('input', updateClipRange);
 }
 
-// 💾 שמירת שיר (פונקציה ריקה עם טעינה)
-async function saveSong(e) {
+function openSongModal(isEdit, songData={}) {
+    isSongEditMode = isEdit;
+    currentSongId = songData.id || -1;
+    DOM_ELEMENTS.addSongModal.style.display='flex';
+    DOM_ELEMENTS.newSongName.value = songData.name || '';
+    DOM_ELEMENTS.newSongFile.value = '';
+    DOM_ELEMENTS.saveSongBtn.textContent = isEdit ? 'שמור שינויים' : 'שמור שיר';
+
+    audioBuffer = null;
+    canvasCtx.clearRect(0,0,DOM_ELEMENTS.waveform.width, DOM_ELEMENTS.waveform.height);
+    DOM_ELEMENTS.clipStartRange.value=0;
+    DOM_ELEMENTS.clipEndRange.value=0;
+    DOM_ELEMENTS.clipStartRange.max=10;
+    DOM_ELEMENTS.clipEndRange.max=10;
+    DOM_ELEMENTS.clipStartLabel.textContent="0.00 שניות";
+    DOM_ELEMENTS.clipEndLabel.textContent="0.00 שניות";
+}
+
+// --- טעינת Waveform ---
+function loadWaveform(e){
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e){
+        audioCtx.decodeAudioData(e.target.result).then(decodedData=>{
+            audioBuffer = decodedData;
+            const duration = audioBuffer.duration;
+            DOM_ELEMENTS.clipStartRange.max = duration.toFixed(2);
+            DOM_ELEMENTS.clipEndRange.max = duration.toFixed(2);
+            DOM_ELEMENTS.clipStartRange.value=0;
+            DOM_ELEMENTS.clipEndRange.value=duration.toFixed(2);
+            drawWaveform(0,duration);
+            updateClipRange();
+        });
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// --- ציור Waveform ---
+function drawWaveform(clipStart=0, clipEnd=0){
+    if(!audioBuffer) return;
+    const width=DOM_ELEMENTS.waveform.width, height=DOM_ELEMENTS.waveform.height;
+    const data = audioBuffer.getChannelData(0);
+    const step = Math.ceil(data.length/width);
+    const amp = height/2;
+    canvasCtx.clearRect(0,0,width,height);
+    canvasCtx.fillStyle='#1c7ed6';
+    for(let i=0;i<width;i++){
+        let min=1,max=-1;
+        for(let j=0;j<step;j++){
+            const d=data[(i*step)+j]; if(d<min) min=d; if(d>max) max=d;
+        }
+        canvasCtx.fillRect(i,(1+min)*amp,1,Math.max(1,(max-min)*amp));
+    }
+    const duration=audioBuffer.duration;
+    const startX=(clipStart/duration)*width, endX=(clipEnd/duration)*width;
+    canvasCtx.strokeStyle='red'; canvasCtx.lineWidth=2;
+    canvasCtx.beginPath(); canvasCtx.moveTo(startX,0); canvasCtx.lineTo(startX,height); canvasCtx.stroke();
+    canvasCtx.strokeStyle='green'; canvasCtx.beginPath(); canvasCtx.moveTo(endX,0); canvasCtx.lineTo(endX,height); canvasCtx.stroke();
+}
+
+// --- עדכון טווח חיתוך ---
+function updateClipRange(){
+    let start=parseFloat(DOM_ELEMENTS.clipStartRange.value);
+    let end=parseFloat(DOM_ELEMENTS.clipEndRange.value);
+    if(end<start) DOM_ELEMENTS.clipEndRange.value=start;
+    DOM_ELEMENTS.clipStartLabel.textContent=start.toFixed(2)+' שניות';
+    DOM_ELEMENTS.clipEndLabel.textContent=end.toFixed(2)+' שניות';
+    if(audioBuffer) drawWaveform(start,end);
+}
+
+// --- שמירת שיר מקומית ---
+function saveSong(e){
     e.preventDefault();
-    
     const name = DOM_ELEMENTS.newSongName.value.trim();
-    if (!name) return alert('⚠️ יש למלא שם שיר.');
+    const clipStart=parseFloat(DOM_ELEMENTS.clipStartRange.value);
+    const clipEnd=parseFloat(DOM_ELEMENTS.clipEndRange.value);
+    if(!name || isNaN(clipStart) || isNaN(clipEnd) || clipEnd<=clipStart) return alert('⚠️ יש למלא שם שיר ולהגדיר טווח חיתוך תקין.');
     
-    // 1. הפעלת מצב טעינה
-    startLoading(DOM_ELEMENTS.addSongModal, DOM_ELEMENTS.songLoadingSpinner, DOM_ELEMENTS.saveSongBtn, 'מעלה...');
-    
-    try {
-        // --- כאן נכנסת לוגיקת ה-API האמיתית שלך! ---
-        const formData = new FormData();
-        formData.append('metadata', JSON.stringify({ name: name, clipStart: 0, clipEnd: 10 }));
-        formData.append('file', DOM_ELEMENTS.newSongFile.files[0] || new Blob([""], { type: 'application/octet-stream' }), DOM_ELEMENTS.newSongFile.files[0] ? DOM_ELEMENTS.newSongFile.files[0].name : 'no_change.txt');
-
-        const response = await fetch('/api/songs', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) throw new Error('Failed to save song');
-        
-        await new Promise(resolve => setTimeout(resolve, 1500)); // סימולציה של זמן טעינה
-
-        // הוספת פריט דמה לרשימה
-        songs.push({ id: Math.random().toString(36).substring(7), name: name }); 
-        renderSongList();
-
-    } catch (err) {
-        console.error("שגיאה מדומית בשמירת שיר:", err);
-        alert('⚠️ שגיאה בשמירת שיר: ' + err.message);
-    } finally {
-        // 2. סיום מצב טעינה וסגירת המודל
-        stopLoading(DOM_ELEMENTS.addSongModal, DOM_ELEMENTS.songLoadingSpinner, DOM_ELEMENTS.saveSongBtn, 'שמור שיר');
-    }
-}
-
-
-// --- ניהול מודל אירועים ---
-function initEventModal() {
-    DOM_ELEMENTS.openEventModalBtn.addEventListener('click', () => {
-        DOM_ELEMENTS.eventModal.style.display = 'flex';
-        renderSongSelect();
-    });
-
-    DOM_ELEMENTS.cancelEventBtn.addEventListener('click', () => {
-        DOM_ELEMENTS.eventModal.style.display = 'none';
-    });
-
-    DOM_ELEMENTS.eventForm.addEventListener('submit', handleSaveEvent);
-}
-
-// 💾 שמירת אירוע (פונקציה ריקה עם טעינה)
-async function handleSaveEvent(e) {
-    e.preventDefault();
-    
-    const name = DOM_ELEMENTS.eventForm.querySelector('#new-event-name').value.trim();
-    if (!name) return alert('⚠️ יש למלא שם אירוע.');
-    
-    // 1. הפעלת מצב טעינה
-    startLoading(DOM_ELEMENTS.eventModal, DOM_ELEMENTS.eventLoadingSpinner, DOM_ELEMENTS.saveEventBtn, 'שומר...');
-    
-    try {
-        // --- כאן נכנסת לוגיקת ה-API האמיתית שלך! ---
-        const response = await fetch('/api/event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                name: name,
-                time: DOM_ELEMENTS.eventForm.querySelector('#new-event-time').value,
-                day: DOM_ELEMENTS.eventForm.querySelector('#new-event-day').value,
-                songId: DOM_ELEMENTS.eventSongSelect.value
-            })
-        });
-
-        if (!response.ok) throw new Error('Failed to save event');
-
-        await new Promise(resolve => setTimeout(resolve, 1500)); // סימולציה של זמן טעינה
-        
-        // הוספת פריט דמה לרשימה
-        events.push({ id: Math.random().toString(36).substring(7), name: name, day: 'חדש', time: '00:00', songId: DOM_ELEMENTS.eventSongSelect.value }); 
-        renderEvents();
-
-    } catch (err) {
-        console.error("שגיאה מדומית בשמירת אירוע:", err);
-        alert('⚠️ שגיאה בשמירת אירוע: ' + err.message);
-    } finally {
-        // 2. סיום מצב טעינה וסגירת המודל
-        stopLoading(DOM_ELEMENTS.eventModal, DOM_ELEMENTS.eventLoadingSpinner, DOM_ELEMENTS.saveEventBtn, 'שמור אירוע');
-    }
-}
-
-// --- רינדור נתונים מדומים ---
-function renderData() {
+    let songData = { id: isSongEditMode ? currentSongId : Date.now(), name, clipStart, clipEnd };
+    if(isSongEditMode){
+        songs = songs.map(s => s.id===currentSongId ? songData : s);
+    } else { songs.push(songData); }
+    saveDataToLocal(); // יש לתקן את מיקום השמירה
+    DOM_ELEMENTS.addSongModal.style.display='none';
     renderSongList();
-    renderEvents();
+    alert('✅ השיר נשמר בהצלחה!');
 }
-function renderSongSelect() {
-    DOM_ELEMENTS.eventSongSelect.innerHTML = '<option value="">בחר שיר...</option>';
-    songs.forEach(song => {
-        const option = document.createElement('option');
-        option.value = String(song.id);
-        option.textContent = song.name;
+
+// --- מחיקת שיר ---
+function removeSong(id){
+    if(confirm('בטוח/ה שברצונך למחוק שיר זה?')){
+        songs = songs.filter(s => s.id!==id);
+        saveDataToLocal(); // יש לתקן את מיקום השמירה
+        renderSongList();
+    }
+}
+window.removeSong = removeSong;
+window.editSong = id=>{
+    const songToEdit=songs.find(s=>s.id==id);
+    if(songToEdit) openSongModal(true,songToEdit);
+};
+
+// --- ניהול אירועים ---
+function initEventsManager(){
+    DOM_ELEMENTS.openEventModalBtn.addEventListener('click',()=>openEventModal(false));
+    DOM_ELEMENTS.cancelEventBtn.addEventListener('click',()=>DOM_ELEMENTS.eventModal.style.display='none');
+    DOM_ELEMENTS.eventForm.addEventListener('submit',handleSaveEvent);
+}
+
+function openEventModal(isEdit,eventData={}){
+    DOM_ELEMENTS.newEventName.value=eventData.name||'';
+    DOM_ELEMENTS.newEventTime.value=eventData.time||'09:00';
+    DOM_ELEMENTS.newEventDay.value=eventData.day||'ראשון';
+    DOM_ELEMENTS.saveEventBtn.textContent=isEdit?'שמור שינויים':'שמור אירוע';
+    isEditMode=isEdit; editingEventIndex=eventData.id||-1;
+
+    DOM_ELEMENTS.eventSongSelect.innerHTML='<option value="">בחר שיר...</option>';
+    songs.forEach(song=>{
+        const option=document.createElement('option');
+        option.value=song.id;
+        option.textContent=song.name;
+        if(song.id===eventData.songId) option.selected=true;
         DOM_ELEMENTS.eventSongSelect.appendChild(option);
     });
-}
-function renderEvents() {
-    DOM_ELEMENTS.eventsList.innerHTML = '';
-    events.forEach(ev => {
-        const song = songs.find(s => String(s.id) === String(ev.songId));
-        const songName = song ? song.name : 'שיר לא קיים';
-        
-        const li = document.createElement('li');
-        li.innerHTML = `
-            <span>${ev.day}, ${ev.time}</span>
-            <strong>${ev.name}</strong>
-            <span class="song-link">${songName}</span>
-            <div class="actions">
-                <button class="edit" data-id="${ev.id}">✏️</button>
-                <button class="del" data-id="${ev.id}">🗑️</button>
-            </div>
-        `;
-        DOM_ELEMENTS.eventsList.appendChild(li);
-    });
-}
-function renderSongList() {
-    DOM_ELEMENTS.songList.innerHTML = '';
-    songs.forEach(song => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-            <span>${song.name}</span>
-            <div class="actions">
-                <button class="edit" data-id="${song.id}">✏️</button>
-                <button class="del" data-id="${song.id}">🗑️</button>
-            </div>
-        `;
-        DOM_ELEMENTS.songList.appendChild(li);
-    });
+
+    DOM_ELEMENTS.eventModal.style.display='flex';
 }
 
+function handleSaveEvent(e){
+    e.preventDefault();
+    const name=DOM_ELEMENTS.newEventName.value.trim();
+    const time=DOM_ELEMENTS.newEventTime.value;
+    const day=DOM_ELEMENTS.newEventDay.value;
+    const songId=DOM_ELEMENTS.eventSongSelect.value;
+    if(!name||name.length<2) return alert('⚠️ יש להזין שם אירוע תקין.');
+    if(!time||!/^\d{2}
