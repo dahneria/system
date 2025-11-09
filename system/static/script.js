@@ -274,4 +274,59 @@ function handleSaveEvent(e){
     const day=DOM_ELEMENTS.newEventDay.value;
     const songId=DOM_ELEMENTS.eventSongSelect.value;
     if(!name||name.length<2) return alert('⚠️ יש להזין שם אירוע תקין.');
-    if(!time||!/^\d{2}
+    if(!time||!/^\d{2}:\d{2}$/.test(time)) return alert('⚠️ יש לבחור שעה תקינה.');
+    if(!day||!songId) return alert('⚠️ יש לבחור שיר.');
+
+    const eventData={id:isEditMode?editingEventIndex:Date.now(), name, time, day, songId};
+
+    if(isEditMode) events = events.map(ev=>ev.id===editingEventIndex?eventData:ev);
+    else events.push(eventData);
+
+    saveDataToLocal(); // יש לתקן את מיקום השמירה
+    DOM_ELEMENTS.eventModal.style.display='none';
+    renderEvents();
+}
+
+function renderEvents(){
+    DOM_ELEMENTS.eventsList.innerHTML='';
+    events.forEach(ev=>{
+        const li=document.createElement('li');
+        const song=songs.find(s=>s.id==ev.songId);
+        li.textContent=`[${ev.day} ${ev.time}] ${ev.name} 🎵 ${song?song.name:'-'} `;
+        li.innerHTML+=`<button onclick="editEvent(${ev.id})" class="btn small">✏️</button> 
+                       <button onclick="removeEvent(${ev.id})" class="btn small cancel">🗑️</button>`;
+        DOM_ELEMENTS.eventsList.appendChild(li);
+    });
+}
+
+window.removeEvent = id => {
+    if(confirm('בטוח/ה שברצונך למחוק אירוע זה?')){
+        events = events.filter(ev=>ev.id!==id);
+        saveDataToLocal(); // יש לתקן את מיקום השמירה
+        renderEvents();
+    }
+};
+
+window.editEvent = id=>{
+    const ev=events.find(e=>e.id==id);
+    if(ev) openEventModal(true,ev);
+};
+
+// --- רשימת שירים ---
+function renderSongList(){
+    DOM_ELEMENTS.songList.innerHTML='';
+    songs.forEach(s=>{
+        const li=document.createElement('li');
+        li.textContent=s.name;
+        li.innerHTML+=` <button onclick="editSong(${s.id})" class="btn small">✏️</button>
+                        <button onclick="removeSong(${s.id})" class="btn small cancel">🗑️</button>`;
+        DOM_ELEMENTS.songList.appendChild(li);
+    });
+}
+
+// --- בקשת גישה למיקרופון ---
+function requestMicrophoneAccess(){
+    navigator.mediaDevices.getUserMedia({ audio:true })
+        .then(stream=>stream.getTracks().forEach(t=>t.stop()))
+        .catch(err=>console.warn('אין גישה למיקרופון',err));
+}
