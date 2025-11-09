@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מערכת צלצולים חכמה</title>
-    <link rel="stylesheet" href="style.css"> 
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -30,21 +30,18 @@
     <div id="events-schedule" class="tab-content card">
         <h2>🗓️ אירועים מתוזמנים</h2>
         <button id="open-event-modal" class="btn">➕ יצירת אירוע חדש</button>
-        <ul id="events-list">
-            </ul>
+        <ul id="events-list"></ul>
     </div>
 
     <div id="song-library" class="tab-content card">
         <h2>🎵 ספריית שירים</h2>
         <button id="add-song-btn" class="btn">➕ הוסף שיר חדש</button>
-        <ul id="song-list">
-            </ul>
+        <ul id="song-list"></ul>
     </div>
-    
+
     <div id="event-modal" class="modal-bg">
         <div class="modal">
             <h3>יצירת/עריכת אירוע</h3>
-            <div id="event-loading-spinner" class="loading-spinner" style="display:none;"></div> 
             <form id="event-form">
                 <label for="new-event-name">שם האירוע:</label>
                 <input type="text" id="new-event-name" required>
@@ -64,8 +61,7 @@
                 </select>
                 
                 <label for="event-song-select">בחר שיר לניגון:</label>
-                <select id="event-song-select" required>
-                    </select>
+                <select id="event-song-select" required></select>
                 
                 <div class="actions">
                     <button type="submit" id="save-event-btn" class="btn">שמור אירוע</button>
@@ -74,18 +70,17 @@
             </form>
         </div>
     </div>
-    
+
     <div id="add-song-modal" class="modal-bg">
         <div class="modal">
             <h3>🎧 הוספת שיר חדש</h3>
-            <div id="song-loading-spinner" class="loading-spinner" style="display:none;"></div> 
             <form id="song-form">
                 <label for="new-song-name">שם השיר:</label>
                 <input type="text" id="new-song-name" required>
                 
                 <label for="new-song-file">קובץ שיר (MP3):</label>
                 <input type="file" id="new-song-file" accept="audio/*">
-                
+
                 <label>תצוגת גל קול:</label>
                 <canvas id="waveform" width="400" height="60"></canvas>
 
@@ -103,7 +98,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script> 
+    <script src="script.js"></script>
 </body>
 </html>
-
